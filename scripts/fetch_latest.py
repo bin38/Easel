@@ -33,6 +33,21 @@ def _slug(value: str) -> str:
     return cleaned.strip("-") or "source"
 
 
+def _redact_sensitive(value: Any) -> Any:
+    if isinstance(value, dict):
+        out = {}
+        for key, item in value.items():
+            key_text = str(key).lower()
+            if any(marker in key_text for marker in ("token", "secret", "password", "api_key", "apikey")):
+                out[key] = "***"
+            else:
+                out[key] = _redact_sensitive(item)
+        return out
+    if isinstance(value, list):
+        return [_redact_sensitive(item) for item in value]
+    return value
+
+
 def _load_config(path: Path) -> dict[str, Any]:
     try:
         import yaml
@@ -89,13 +104,13 @@ def _fetch_remote_json(source: dict[str, Any], api_key: str | None) -> Any:
 
 
 def _write_payload(data_dir: Path, platform: str, source: dict[str, Any], payload: Any) -> Path:
-    name = str(source.get("name") or source.get("id") or source.get("url") or "source")
+    name = str(source.get("name") or source.get("id") or "source")
     path = data_dir / f"{platform}_{_slug(name)}.json"
     record = {
         "platform": platform,
         "source": name,
         "fetched_at": _utc_now(),
-        "data": payload,
+        "data": _redact_sensitive(payload),
     }
     path.write_text(json.dumps(record, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return path
@@ -113,16 +128,16 @@ def run(config_path: Path, data_dir: Path) -> int:
             continue
         platform = str(source.get("platform", "")).strip().lower()
         if platform not in API_KEYS:
-            print(f"[fetch_latest] skip unknown platform: {platform or '<empty>'}")
+            print("[fetch_latest] skip unknown platform")
             continue
         env_name = API_KEYS[platform]
         try:
             payload = _fetch_remote_json(source, os.getenv(env_name))
             output = _write_payload(data_dir, platform, source, payload)
-            print(f"[fetch_latest] wrote {output}")
+            print(f"[fetch_latest] wrote {output.name}")
         except Exception as exc:  # pragma: no cover - narrow behavior validated in tests
             errors += 1
-            print(f"[fetch_latest] {platform} fetch failed: {exc}", file=sys.stderr)
+            print(f"[fetch_latest] {platform} fetch failed", file=sys.stderr)
     return 1 if errors else 0
 
 
