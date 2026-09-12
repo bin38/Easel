@@ -1,0 +1,62 @@
+name: Fetch Latest Social Content
+
+on:
+  schedule:
+    - cron: "0 * * * *"
+  workflow_dispatch:
+    inputs:
+      commit_changes:
+        description: "Commit and push updated data files"
+        required: false
+        default: "true"
+        type: choice
+        options:
+          - "true"
+          - "false"
+
+permissions:
+  contents: write
+
+jobs:
+  fetch-latest:
+    runs-on: ubuntu-latest
+    env:
+      XHS_API_KEY: ${{ secrets.XHS_API_KEY }}
+      DOUYIN_API_KEY: ${{ secrets.DOUYIN_API_KEY }}
+      ZHIHU_API_KEY: ${{ secrets.ZHIHU_API_KEY }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install requirements
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          pip install pyyaml
+
+      - name: Fetch latest content
+        run: python scripts/fetch_latest.py
+
+      - name: Commit updated data
+        shell: bash
+        env:
+          COMMIT_CHANGES: ${{ github.event_name == 'schedule' && 'true' || github.event.inputs.commit_changes }}
+        run: |
+          if [ "$COMMIT_CHANGES" != "true" ]; then
+            echo "Skipping commit/push (commit_changes=$COMMIT_CHANGES)"
+            exit 0
+          fi
+          if [ -z "$(git status --porcelain -- data)" ]; then
+            echo "No data changes to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/
+          git commit -m "chore(data): refresh latest social content"
+          git push
