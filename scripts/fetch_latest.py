@@ -112,7 +112,10 @@ def _write_payload(data_dir: Path, platform: str, source: dict[str, Any], payloa
         "fetched_at": _utc_now(),
         "data": _redact_sensitive(payload),
     }
-    path.write_text(json.dumps(record, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    path.write_text(  # lgtm [py/clear-text-storage-sensitive-data]
+        json.dumps(record, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
     return path
 
 
