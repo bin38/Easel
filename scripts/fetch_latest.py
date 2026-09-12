@@ -133,11 +133,11 @@ def run(config_path: Path, data_dir: Path) -> int:
         env_name = API_KEYS[platform]
         try:
             payload = _fetch_remote_json(source, os.getenv(env_name))
-            output = _write_payload(data_dir, platform, source, payload)
-            print(f"[fetch_latest] wrote {output.name}")
-        except Exception as exc:  # pragma: no cover - narrow behavior validated in tests
+            _write_payload(data_dir, platform, source, payload)
+            print("[fetch_latest] wrote data file")
+        except Exception:  # pragma: no cover - narrow behavior validated in tests
             errors += 1
-            print(f"[fetch_latest] {platform} fetch failed", file=sys.stderr)
+            print("[fetch_latest] fetch failed", file=sys.stderr)
     return 1 if errors else 0
 
 
